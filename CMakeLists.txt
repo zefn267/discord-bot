@@ -12,6 +12,8 @@ add_library(discord_bot_core STATIC
         src/logging.h
         src/config.cpp
         src/config.h
+        src/bot.cpp
+        src/bot.h
 )
 
 target_include_directories(discord_bot_core PUBLIC src)
