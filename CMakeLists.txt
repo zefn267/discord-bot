@@ -14,6 +14,7 @@ add_library(discord_bot_core STATIC
         src/config.h
         src/bot.cpp
         src/bot.h
+        src/commands.h
 )
 
 target_include_directories(discord_bot_core PUBLIC src)
