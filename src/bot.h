@@ -26,4 +26,10 @@ private:
     void handle_ping(const dpp::slashcommand_t& event);
 
     void handle_help(const dpp::slashcommand_t& event);
+
+    void handle_join(const dpp::slashcommand_t& event);
+
+    void handle_voice_ready(const dpp::voice_ready_t& event);
+
+    void handle_leave(const dpp::slashcommand_t& event);
 };
