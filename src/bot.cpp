@@ -145,7 +145,8 @@ void bot::handle_leave(const dpp::slashcommand_t& event) {
             return;
         } else {
             spdlog::info("User send /leave but he on different channel");
-            event.reply(dpp::message("You need to be in the same voice channel as the bot").set_flags(dpp::m_ephemeral));
+            event.reply(
+                    dpp::message("You need to be in the same voice channel as the bot").set_flags(dpp::m_ephemeral));
             return;
         }
     }

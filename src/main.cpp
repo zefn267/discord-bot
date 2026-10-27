@@ -1,19 +1,8 @@
 #include "bot.h"
 #include "logging.h"
 #include "config.h"
+#include "audio/decoder.h"
 
-#include <spdlog/spdlog.h>
-
-
-extern "C" {
-#include <libavutil/avutil.h>
-}
-
-
-static void print_version() {
-    auto version = av_version_info();
-    spdlog::info("FFmpeg version: {}", version);
-}
 
 int main() {
     set_settings_logs();
