@@ -74,3 +74,4 @@ Testing/
 
 .env
 test_data/
+*.raw
