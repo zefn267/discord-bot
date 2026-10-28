@@ -1,6 +1,7 @@
 #pragma once
 #include <filesystem>
 #include <vector>
+#include <memory>
 
 struct AVFormatContext;
 struct AVCodecContext;
@@ -9,31 +10,37 @@ struct AVPacket;
 struct AVFrame;
 struct SwrContext;
 
+struct av_deleter {
+    void operator()(AVFormatContext* format_context) const;
+    void operator()(AVCodecContext* codec_context) const;
+    void operator()(SwrContext* swr_context) const;
+    void operator()(AVFrame* frame) const;
+    void operator()(AVPacket* packet) const;
+};
+
+using avformat_context_ptr = std::unique_ptr<AVFormatContext, av_deleter>;
+using avcodec_context_ptr = std::unique_ptr<AVCodecContext, av_deleter>;
+using av_packet_ptr = std::unique_ptr<AVPacket, av_deleter>;
+using av_frame_ptr = std::unique_ptr<AVFrame, av_deleter>;
+using swr_context_ptr = std::unique_ptr<SwrContext, av_deleter>;
+
 enum class read_result { data, error, end_of_stream };
 
 void print_version();
 
 class decoder {
 public:
-    decoder() = default;
-
-    decoder(const decoder&) = delete;
-
-    decoder& operator=(const decoder&) = delete;
-
-    ~decoder();
-
     int open(const std::filesystem::path& file_path);
 
     read_result read_pcm(std::vector<int16_t>& pcm);
 
 private:
-    AVCodecContext* codec_context = nullptr;
-    AVFormatContext* format_context = nullptr;
+    avcodec_context_ptr codec_context;
+    avformat_context_ptr format_context;
     const AVCodec* codec = nullptr;
-    AVFrame* frame = nullptr;
-    AVPacket* packet = nullptr;
-    SwrContext* swr_context = nullptr;
+    av_frame_ptr frame;
+    av_packet_ptr packet;
+    swr_context_ptr swr_context;
     int audio_stream_ind = -1;
 
     enum class states { reading, draining, finished };

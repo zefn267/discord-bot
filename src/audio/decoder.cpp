@@ -8,7 +8,6 @@ extern "C" {
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
 #include <libswresample/swresample.h>
-#include <libavutil/opt.h>
 #include <libavutil/channel_layout.h>
 }
 
@@ -26,41 +25,55 @@ static std::string av_err_to_string(int err) {
     return std::string(errbuf);
 }
 
-decoder::~decoder() {
+void av_deleter::operator()(AVCodecContext* codec_context) const {
     avcodec_free_context(&codec_context);
-    avformat_close_input(&format_context);
+}
+
+void av_deleter::operator()(AVFrame* frame) const {
     av_frame_free(&frame);
+}
+
+void av_deleter::operator()(AVPacket* packet) const {
     av_packet_free(&packet);
+}
+
+void av_deleter::operator()(SwrContext* swr_context) const {
     swr_free(&swr_context);
 }
 
+void av_deleter::operator()(AVFormatContext* format_context) const {
+    avformat_close_input(&format_context);
+}
+
 int decoder::open(const std::filesystem::path& file_path) {
-    int code = avformat_open_input(&format_context, file_path.c_str(), nullptr, nullptr);
+    AVFormatContext* fmt_context = nullptr;
+    int code = avformat_open_input(&fmt_context, file_path.c_str(), nullptr, nullptr);
     if (code < 0) {
         spdlog::error("Failed to open input file '{}': {}", file_path.c_str(), av_err_to_string(code));
         return code;
     }
-    code = avformat_find_stream_info(format_context, nullptr);
+    format_context.reset(fmt_context);
+    code = avformat_find_stream_info(format_context.get(), nullptr);
     if (code < 0) {
         spdlog::error("Failed to read stream info: {}", av_err_to_string(code));
         return code;
     }
-    audio_stream_ind = av_find_best_stream(format_context, AVMEDIA_TYPE_AUDIO, -1, -1, &codec, 0);
+    audio_stream_ind = av_find_best_stream(format_context.get(), AVMEDIA_TYPE_AUDIO, -1, -1, &codec, 0);
     if (audio_stream_ind < 0) {
         spdlog::error("No audio stream found: {}", av_err_to_string(audio_stream_ind));
         return audio_stream_ind;
     }
-    codec_context = avcodec_alloc_context3(codec);
+    codec_context.reset(avcodec_alloc_context3(codec));
     if (!codec_context) {
         spdlog::error("Failed to allocate codec context");
         return AVERROR(ENOMEM);
     }
-    code = avcodec_parameters_to_context(codec_context, format_context->streams[audio_stream_ind]->codecpar);
+    code = avcodec_parameters_to_context(codec_context.get(), format_context->streams[audio_stream_ind]->codecpar);
     if (code < 0) {
         spdlog::error("Failed to copy codec parameters: {}", av_err_to_string(code));
         return code;
     }
-    code = avcodec_open2(codec_context, codec, nullptr);
+    code = avcodec_open2(codec_context.get(), codec, nullptr);
     if (code < 0) {
         spdlog::error("Failed to open codec: {}", av_err_to_string(code));
         return code;
@@ -69,12 +82,12 @@ int decoder::open(const std::filesystem::path& file_path) {
             codec_context->sample_rate, codec_context->ch_layout.nb_channels,
             av_get_sample_fmt_name(codec_context->sample_fmt));
     spdlog::info("Duration: {:.3f} sec", static_cast<double>(format_context->duration) / AV_TIME_BASE);
-    packet = av_packet_alloc();
+    packet.reset(av_packet_alloc());
     if (!packet) {
         spdlog::error("Failed to allocate packet");
         return AVERROR(ENOMEM);
     }
-    frame = av_frame_alloc();
+    frame.reset(av_frame_alloc());
     if (!frame) {
         spdlog::error("Failed to allocate frame");
         return AVERROR(ENOMEM);
@@ -82,14 +95,16 @@ int decoder::open(const std::filesystem::path& file_path) {
 
     AVChannelLayout out_layout;
     av_channel_layout_default(&out_layout, 2);
-    code = swr_alloc_set_opts2(&swr_context, &out_layout, AV_SAMPLE_FMT_S16, 48000, &codec_context->ch_layout,
+    SwrContext* raw = nullptr;
+    code = swr_alloc_set_opts2(&raw, &out_layout, AV_SAMPLE_FMT_S16, 48000, &codec_context->ch_layout,
             codec_context->sample_fmt, codec_context->sample_rate, 0, nullptr);
+    av_channel_layout_uninit(&out_layout);
     if (code < 0) {
         spdlog::error("Failed to allocate swr context: {}", av_err_to_string(code));
         return code;
     }
-    av_channel_layout_uninit(&out_layout);
-    code = swr_init(swr_context);
+    swr_context.reset(raw);
+    code = swr_init(swr_context.get());
     if (code < 0) {
         spdlog::error("Failed to initialize swr: {}", av_err_to_string(code));
         return code;
@@ -101,13 +116,13 @@ int decoder::open(const std::filesystem::path& file_path) {
 
 read_result decoder::read_pcm(std::vector<int16_t>& pcm) {
     while (true) {
-        int code = avcodec_receive_frame(codec_context, frame);
+        int code = avcodec_receive_frame(codec_context.get(), frame.get());
         if (code == 0) {
-            int max_out_samples = swr_get_out_samples(swr_context, frame->nb_samples);
+            int max_out_samples = swr_get_out_samples(swr_context.get(), frame->nb_samples);
             pcm.resize(max_out_samples * 2);
             auto ptr = reinterpret_cast<uint8_t*>(pcm.data());
-            int gets = swr_convert(swr_context, &ptr, max_out_samples, frame->extended_data, frame->nb_samples);
-            av_frame_unref(frame);
+            int gets = swr_convert(swr_context.get(), &ptr, max_out_samples, frame->extended_data, frame->nb_samples);
+            av_frame_unref(frame.get());
             if (gets < 0) {
                 spdlog::error("Failed to resampling frame: {}", av_err_to_string(gets));
                 return read_result::error;
@@ -117,10 +132,10 @@ read_result decoder::read_pcm(std::vector<int16_t>& pcm) {
                 return read_result::data;
             }
         } else if (code == AVERROR(EAGAIN)) {
-            int result = av_read_frame(format_context, packet);
+            int result = av_read_frame(format_context.get(), packet.get());
 
             if (result == AVERROR_EOF) {
-                int result = avcodec_send_packet(codec_context, nullptr);
+                int result = avcodec_send_packet(codec_context.get(), nullptr);
                 if (result < 0) {
                     spdlog::error("Failed to send packet with nullptr: {}", av_err_to_string(result));
                     return read_result::error;
@@ -133,11 +148,11 @@ read_result decoder::read_pcm(std::vector<int16_t>& pcm) {
                 return read_result::error;
             }
             if (packet->stream_index != audio_stream_ind) {
-                av_packet_unref(packet);
+                av_packet_unref(packet.get());
                 continue;
             }
-            result = avcodec_send_packet(codec_context, packet);
-            av_packet_unref(packet);
+            result = avcodec_send_packet(codec_context.get(), packet.get());
+            av_packet_unref(packet.get());
             if (result < 0) {
                 spdlog::error("Failed to send packet: {}", av_err_to_string(result));
                 return read_result::error;
@@ -146,10 +161,10 @@ read_result decoder::read_pcm(std::vector<int16_t>& pcm) {
             if (state == states::finished) {
                 return read_result::end_of_stream;
             }
-            int max_out_samples = swr_get_out_samples(swr_context, 0);
+            int max_out_samples = swr_get_out_samples(swr_context.get(), 0);
             pcm.resize(max_out_samples * 2);
             auto ptr = reinterpret_cast<uint8_t*>(pcm.data());
-            int gets = swr_convert(swr_context, &ptr, max_out_samples, nullptr, 0);
+            int gets = swr_convert(swr_context.get(), &ptr, max_out_samples, nullptr, 0);
             if (gets < 0) {
                 spdlog::error("Failed to resampling frame: {}", av_err_to_string(gets));
                 return read_result::error;
