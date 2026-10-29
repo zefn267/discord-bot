@@ -1,11 +1,13 @@
 #include "bot.h"
 #include "logging.h"
+#include "config.h"
+#include "audio/decoder.h"
 
 #include <spdlog/spdlog.h>
 #include <format>
 
 
-bot::bot(const bot_config& config) : cluster(config.token) {
+bot::bot(const bot_config& config) : cluster(config.token), test_file_path(config.audio_file) {
     cluster.on_log(change_logs_from_dpp);
 
     commands["ping"] = {.name = "ping",
@@ -24,6 +26,10 @@ bot::bot(const bot_config& config) : cluster(config.token) {
             .description = "Leave from channel",
             .category = "Voice",
             .handler = std::bind_front(&bot::handle_leave, this)};
+    commands["test"] = {.name = "test",
+            .description = "test audio file",
+            .category = "Voice",
+            .handler = std::bind_front(&bot::handle_test, this)};
 
     cluster.on_slashcommand([this](const dpp::slashcommand_t& event) { handle_slash_command(event); });
     cluster.on_ready([this](const dpp::ready_t& event) { handle_ready(event); });
@@ -151,4 +157,44 @@ void bot::handle_leave(const dpp::slashcommand_t& event) {
         }
     }
     event.reply(dpp::message("You need to be in the same voice channel as the bot").set_flags(dpp::m_ephemeral));
+}
+
+void bot::handle_test(const dpp::slashcommand_t& event) {
+    if (!test_file_path.has_value()) {
+        event.reply(dpp::message("Test audio file is not configured").set_flags(dpp::m_ephemeral));
+    }
+    dpp::voiceconn* v = event.from()->get_voice(event.command.guild_id);
+    if (!v || !v->voiceclient || !v->voiceclient->is_ready()) {
+        event.reply("There was an issue with getting the voice channel. Make sure I'm in a voice channel!");
+        return;
+    }
+    event.reply("Playing test file");
+    decoder dec;
+    std::vector<int16_t> pcm;
+    std::vector<int16_t> buf;
+    dec.open(test_file_path.value());
+    while (true) {
+        auto result = dec.read_pcm(pcm);
+        if (result == read_result::error) {
+            spdlog::info("Error reading pcm");
+            break;
+        }
+        if (result == read_result::data) {
+            buf.insert(buf.end(), pcm.begin(), pcm.end());
+        }
+        if (result == read_result::end_of_stream) {
+            if (!buf.empty()) {
+                buf.resize(dpp::send_audio_raw_max_length / sizeof(int16_t));
+                v->voiceclient->send_audio_raw(reinterpret_cast<uint16_t*>(buf.data()), dpp::send_audio_raw_max_length);
+                buf.clear();
+            }
+            break;
+        }
+        auto bytes = buf.size() * sizeof(int16_t);
+        while (bytes >= dpp::send_audio_raw_max_length) {
+            v->voiceclient->send_audio_raw(reinterpret_cast<uint16_t*>(buf.data()), dpp::send_audio_raw_max_length);
+            buf.erase(buf.begin(), buf.begin() + dpp::send_audio_raw_max_length / sizeof(int16_t));
+            bytes -= dpp::send_audio_raw_max_length;
+        }
+    }
 }

@@ -18,6 +18,7 @@ public:
 private:
     dpp::cluster cluster;
     std::unordered_map<std::string, command> commands;
+    std::optional<std::string> test_file_path;
 
     void handle_slash_command(const dpp::slashcommand_t& event);
 
@@ -32,4 +33,6 @@ private:
     void handle_voice_ready(const dpp::voice_ready_t& event);
 
     void handle_leave(const dpp::slashcommand_t& event);
+
+    void handle_test(const dpp::slashcommand_t& event);
 };

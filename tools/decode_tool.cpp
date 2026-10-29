@@ -14,7 +14,7 @@ int main(int argc, char** argv) {
         return 1;
     }
     decoder dec;
-    if (dec.open(argv[1])) {
+    if (dec.open(argv[1]) < 0) {
         return 1;
     }
     std::ofstream file(argv[2], std::ios::binary);
