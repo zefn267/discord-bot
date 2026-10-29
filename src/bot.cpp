@@ -9,7 +9,7 @@
 
 bot::bot(const bot_config& config)
     : cluster(config.token), testfile_path(config.audio_file),
-      context{.cluster = cluster, .registry = registry, .testfile_path = testfile_path} {
+      context{.cluster = cluster, .registry = registry, .testfile_path = testfile_path, .test_playback_thread = test_playback_thread} {
     cluster.on_log(change_logs_from_dpp);
 
     register_general_commands(registry);

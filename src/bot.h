@@ -3,6 +3,7 @@
 #include "commands/command_registry.h"
 #include "commands/command_context.h"
 
+#include <thread>
 #include <dpp/dpp.h>
 
 
@@ -20,6 +21,7 @@ private:
     dpp::cluster cluster;
     command_registry registry;
     std::optional<std::string> testfile_path;
+    std::jthread test_playback_thread;
     command_context context;
 
     void handle_slash_command(const dpp::slashcommand_t& event) const;
