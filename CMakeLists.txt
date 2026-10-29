@@ -3,20 +3,32 @@ project(discord_bot LANGUAGES CXX)
 
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-set(PROJECT_WARNINGS -Wall -Wextra -Wpedantic)
+set(PROJECT_WARNINGS -Wall -Wextra -Wpedantic -Wshadow)
 
 find_package(dpp CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(FFMPEG REQUIRED)
 
 add_library(discord_bot_core STATIC
-        src/logging.cpp
-        src/logging.h
-        src/config.cpp
-        src/config.h
         src/bot.cpp
         src/bot.h
-        src/commands.h
+        src/config.cpp
+        src/config.h
+        src/logging.cpp
+        src/logging.h
+
+        src/commands/command.h
+        src/commands/command_context.h
+        src/commands/command_registry.cpp
+        src/commands/command_registry.h
+        src/commands/general_commands.cpp
+        src/commands/general_commands.h
+        src/commands/voice_commands.cpp
+        src/commands/voice_commands.h
+
+        src/voice/voice_checks.cpp
+        src/voice/voice_checks.h
+
         src/audio/decoder.cpp
         src/audio/decoder.h
 )

@@ -1,8 +1,9 @@
 #pragma once
 #include "config.h"
-#include "commands.h"
+#include "commands/command_registry.h"
+#include "commands/command_context.h"
+
 #include <dpp/dpp.h>
-#include <unordered_map>
 
 
 class bot {
@@ -17,22 +18,13 @@ public:
 
 private:
     dpp::cluster cluster;
-    std::unordered_map<std::string, command> commands;
-    std::optional<std::string> test_file_path;
+    command_registry registry;
+    std::optional<std::string> testfile_path;
+    command_context context;
 
-    void handle_slash_command(const dpp::slashcommand_t& event);
+    void handle_slash_command(const dpp::slashcommand_t& event) const;
 
     void handle_ready(const dpp::ready_t&);
 
-    void handle_ping(const dpp::slashcommand_t& event);
-
-    void handle_help(const dpp::slashcommand_t& event);
-
-    void handle_join(const dpp::slashcommand_t& event);
-
     void handle_voice_ready(const dpp::voice_ready_t& event);
-
-    void handle_leave(const dpp::slashcommand_t& event);
-
-    void handle_test(const dpp::slashcommand_t& event);
 };
