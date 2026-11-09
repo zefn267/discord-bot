@@ -8,6 +8,7 @@ set(PROJECT_WARNINGS -Wall -Wextra -Wpedantic -Wshadow)
 find_package(dpp CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(FFMPEG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
 
 add_library(discord_bot_core STATIC
         src/bot.cpp
@@ -36,6 +37,9 @@ add_library(discord_bot_core STATIC
         src/process/process.h
         src/process/unique_fd.cpp
         src/process/unique_fd.h
+
+        src/ytdlp/soundtrack_info.cpp
+        src/ytdlp/soundtrack_info.h
 )
 
 target_include_directories(discord_bot_core PUBLIC src)
@@ -64,3 +68,7 @@ target_link_libraries(decode_tool PRIVATE discord_bot_core spdlog::spdlog)
 add_executable(process_tool tools/process_tool.cpp)
 target_compile_options(process_tool PRIVATE ${PROJECT_WARNINGS})
 target_link_libraries(process_tool PRIVATE discord_bot_core spdlog::spdlog)
+
+add_executable(ytdlp_tool tools/ytdlp_tool.cpp)
+target_compile_options(ytdlp_tool PRIVATE ${PROJECT_WARNINGS})
+target_link_libraries(ytdlp_tool PRIVATE discord_bot_core spdlog::spdlog nlohmann_json::nlohmann_json)

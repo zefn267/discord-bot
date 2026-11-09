@@ -4,6 +4,7 @@
   "dependencies": [
     "dpp",
     "spdlog",
+    "nlohmann-json",
     {
       "name": "ffmpeg",
       "default-features": false,
