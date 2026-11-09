@@ -31,6 +31,11 @@ add_library(discord_bot_core STATIC
 
         src/audio/decoder.cpp
         src/audio/decoder.h
+
+        src/process/process.cpp
+        src/process/process.h
+        src/process/unique_fd.cpp
+        src/process/unique_fd.h
 )
 
 target_include_directories(discord_bot_core PUBLIC src)
@@ -55,3 +60,7 @@ target_link_libraries(discord_bot PRIVATE discord_bot_core spdlog::spdlog)
 add_executable(decode_tool tools/decode_tool.cpp)
 target_compile_options(decode_tool PRIVATE ${PROJECT_WARNINGS})
 target_link_libraries(decode_tool PRIVATE discord_bot_core spdlog::spdlog)
+
+add_executable(process_tool tools/process_tool.cpp)
+target_compile_options(process_tool PRIVATE ${PROJECT_WARNINGS})
+target_link_libraries(process_tool PRIVATE discord_bot_core spdlog::spdlog)

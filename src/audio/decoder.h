@@ -35,13 +35,13 @@ public:
     read_result read_pcm(std::vector<int16_t>& pcm);
 
 private:
-    avcodec_context_ptr codec_context;
-    avformat_context_ptr format_context;
-    const AVCodec* codec = nullptr;
-    av_frame_ptr frame;
-    av_packet_ptr packet;
-    swr_context_ptr swr_context;
-    int audio_stream_ind = -1;
+    avcodec_context_ptr codec_context_;
+    avformat_context_ptr format_context_;
+    const AVCodec* codec_ = nullptr;
+    av_frame_ptr frame_;
+    av_packet_ptr packet_;
+    swr_context_ptr swr_context_;
+    int audio_stream_ind_ = -1;
 
     enum class states { reading, draining, finished };
 

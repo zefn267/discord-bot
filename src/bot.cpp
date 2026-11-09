@@ -8,28 +8,28 @@
 
 
 bot::bot(const bot_config& config)
-    : cluster(config.token), testfile_path(config.audio_file),
-      context{.cluster = cluster, .registry = registry, .testfile_path = testfile_path, .test_playback_thread = test_playback_thread} {
-    cluster.on_log(change_logs_from_dpp);
+    : cluster_(config.token), testfile_path_(config.audio_file),
+      context_{.cluster = cluster_, .registry = registry_, .testfile_path = testfile_path_, .test_playback_thread = test_playback_thread_} {
+    cluster_.on_log(change_logs_from_dpp);
 
-    register_general_commands(registry);
-    register_voice_commands(registry);
+    register_general_commands(registry_);
+    register_voice_commands(registry_);
 
-    cluster.on_slashcommand([this](const dpp::slashcommand_t& event) { handle_slash_command(event); });
-    cluster.on_ready([this](const dpp::ready_t& event) { handle_ready(event); });
-    cluster.on_voice_ready([this](const dpp::voice_ready_t& event) { handle_voice_ready(event); });
+    cluster_.on_slashcommand([this](const dpp::slashcommand_t& event) { handle_slash_command(event); });
+    cluster_.on_ready([this](const dpp::ready_t& event) { handle_ready(event); });
+    cluster_.on_voice_ready([this](const dpp::voice_ready_t& event) { handle_voice_ready(event); });
 }
 
 void bot::start() {
-    cluster.start(dpp::st_wait);
+    cluster_.start(dpp::st_wait);
 }
 
 void bot::handle_slash_command(const dpp::slashcommand_t& event) const {
     const std::string name = event.command.get_command_name();
     spdlog::info("Command /{} was invoked by {} (ID: {})", name, event.command.usr.username, event.command.usr.id);
-    auto cmd = registry.find_command(name);
+    auto cmd = registry_.find_command(name);
     if (cmd != nullptr) {
-        cmd->handler(event, context);
+        cmd->handler(event, context_);
     } else {
         spdlog::warn("Command {} was not found", name);
         event.reply(dpp::message("Unknown command").set_flags(dpp::m_ephemeral));
@@ -39,10 +39,10 @@ void bot::handle_slash_command(const dpp::slashcommand_t& event) const {
 void bot::handle_ready(const dpp::ready_t&) {
     if (dpp::run_once<struct register_bot_commands>()) {
         std::vector<dpp::slashcommand> discord_commands;
-        for (auto& [name, cmd] : registry.get_all_commands()) {
-            discord_commands.emplace_back(cmd.name, cmd.description, cluster.me.id);
+        for (auto& [name, cmd] : registry_.get_all_commands()) {
+            discord_commands.emplace_back(cmd.name, cmd.description, cluster_.me.id);
         }
-        cluster.global_bulk_command_create(discord_commands);
+        cluster_.global_bulk_command_create(discord_commands);
     }
 
     spdlog::info("Bot started!");

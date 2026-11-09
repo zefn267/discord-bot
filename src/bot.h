@@ -18,11 +18,11 @@ public:
     void start();
 
 private:
-    dpp::cluster cluster;
-    command_registry registry;
-    std::optional<std::string> testfile_path;
-    std::jthread test_playback_thread;
-    command_context context;
+    dpp::cluster cluster_;
+    command_registry registry_;
+    std::optional<std::string> testfile_path_;
+    std::jthread test_playback_thread_;
+    command_context context_;
 
     void handle_slash_command(const dpp::slashcommand_t& event) const;
 
