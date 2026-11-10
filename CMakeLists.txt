@@ -72,3 +72,7 @@ target_link_libraries(process_tool PRIVATE discord_bot_core spdlog::spdlog)
 add_executable(ytdlp_tool tools/ytdlp_tool.cpp)
 target_compile_options(ytdlp_tool PRIVATE ${PROJECT_WARNINGS})
 target_link_libraries(ytdlp_tool PRIVATE discord_bot_core spdlog::spdlog nlohmann_json::nlohmann_json)
+
+add_executable(stream_tool tools/stream_tool.cpp)
+target_compile_options(stream_tool PRIVATE ${PROJECT_WARNINGS})
+target_link_libraries(stream_tool PRIVATE discord_bot_core spdlog::spdlog )

@@ -1,3 +1,13 @@
+/*
+decode_tool — decodes a local audio file into raw PCM (s16le, 48 kHz, stereo).
+
+Usage:
+  decode_tool <input_file> <output.raw>
+
+Example:
+  decode_tool test_data/input.mp3 out.raw
+  aplay -f S16_LE -r 48000 -c 2 out.raw
+*/
 #include "audio/decoder.h"
 #include "logging.h"
 
@@ -8,7 +18,7 @@
 int main(int argc, char** argv) {
     set_settings_logs();
 
-    print_version();
+    init_ffmpeg();
     if (argc < 3) {
         spdlog::error("Usage: {} <input_file> <output_file>", argv[0]);
         return 1;

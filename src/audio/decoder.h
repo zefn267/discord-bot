@@ -1,7 +1,9 @@
 #pragma once
-#include <filesystem>
+
+#include <string>
 #include <vector>
 #include <memory>
+#include <unordered_map>
 
 struct AVFormatContext;
 struct AVCodecContext;
@@ -26,11 +28,11 @@ using swr_context_ptr = std::unique_ptr<SwrContext, av_deleter>;
 
 enum class read_result { data, error, end_of_stream };
 
-void print_version();
+void init_ffmpeg();
 
 class decoder {
 public:
-    int open(const std::filesystem::path& file_path);
+    int open(const std::string& url, const std::unordered_map<std::string, std::string>& headers = {});
 
     read_result read_pcm(std::vector<int16_t>& pcm);
 

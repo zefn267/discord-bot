@@ -1,3 +1,15 @@
+/*
+process_tool — runs an arbitrary command via process::run and prints
+its exit code and stdout. Used to test the process module.
+
+Usage:
+  process_tool <program> [args...]
+
+Examples:
+  process_tool echo hello
+  process_tool false
+  process_tool yt-dlp --version
+*/
 #include "process/process.h"
 
 #include <iostream>

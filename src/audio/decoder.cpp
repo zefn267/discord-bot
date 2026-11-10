@@ -1,6 +1,7 @@
 #include "decoder.h"
 
 #include <spdlog/spdlog.h>
+#include <format>
 
 extern "C" {
 #include <libavutil/avutil.h>
@@ -9,20 +10,38 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libswresample/swresample.h>
 #include <libavutil/channel_layout.h>
+#include <libavutil/dict.h>
 }
 
+namespace {
 
-void print_version() {
-    auto version = av_version_info();
-    spdlog::info("FFmpeg version: {}", version);
-}
+class av_dict {
+public:
+    av_dict() = default;
 
-static std::string av_err_to_string(int err) {
+    ~av_dict() { av_dict_free(&av_dict_); }
+
+    av_dict(const av_dict&) = delete;
+
+    av_dict& operator=(const av_dict&) = delete;
+
+    AVDictionary** get_address() { return &av_dict_; }
+private:
+    AVDictionary* av_dict_ = nullptr;
+};
+
+std::string av_err_to_string(int err) {
     char errbuf[AV_ERROR_MAX_STRING_SIZE];
 
     av_strerror(err, errbuf, sizeof(errbuf));
 
-    return std::string(errbuf);
+    return errbuf;
+}
+} // namespace
+void init_ffmpeg() {
+    auto version = av_version_info();
+    av_log_set_level(AV_LOG_WARNING);
+    spdlog::info("FFmpeg version: {}", version);
 }
 
 void av_deleter::operator()(AVCodecContext* codec_context) const {
@@ -45,11 +64,27 @@ void av_deleter::operator()(AVFormatContext* format_context) const {
     avformat_close_input(&format_context);
 }
 
-int decoder::open(const std::filesystem::path& file_path) {
+int decoder::open(const std::string& url, const std::unordered_map<std::string, std::string>& headers) {
     AVFormatContext* fmt_context = nullptr;
-    int code = avformat_open_input(&fmt_context, file_path.c_str(), nullptr, nullptr);
+    av_dict dict;
+    if (!headers.empty()) {
+        std::string all_headers;
+        for (const auto& [header, value] : headers) {
+            all_headers += std::format("{}: {}\r\n", header, value);
+        }
+        av_dict_set(dict.get_address(), "headers", all_headers.c_str(),  0);
+    }
+    if (url.starts_with("https://") || url.starts_with("http://")) {
+        av_dict_set(dict.get_address(), "rw_timeout", "10000000",  0);
+        av_dict_set(dict.get_address(), "reconnect", "1", 0);
+        av_dict_set(dict.get_address(), "reconnect_streamed", "1", 0);
+        av_dict_set(dict.get_address(), "reconnect_on_network_error", "1", 0);
+        av_dict_set(dict.get_address(), "reconnect_on_http_error", "500,502,503,504", 0);
+        av_dict_set(dict.get_address(), "reconnect_delay_max", "5", 0);
+    }
+    int code = avformat_open_input(&fmt_context, url.c_str(), nullptr, dict.get_address());
     if (code < 0) {
-        spdlog::error("Failed to open input file '{}': {}", file_path.c_str(), av_err_to_string(code));
+        spdlog::error("Failed to open input file '{}': {}", url.c_str(), av_err_to_string(code));
         return code;
     }
     format_context_.reset(fmt_context);
@@ -121,7 +156,8 @@ read_result decoder::read_pcm(std::vector<int16_t>& pcm) {
             int max_out_samples = swr_get_out_samples(swr_context_.get(), frame_->nb_samples);
             pcm.resize(max_out_samples * 2);
             auto ptr = reinterpret_cast<uint8_t*>(pcm.data());
-            int gets = swr_convert(swr_context_.get(), &ptr, max_out_samples, frame_->extended_data, frame_->nb_samples);
+            int gets =
+                    swr_convert(swr_context_.get(), &ptr, max_out_samples, frame_->extended_data, frame_->nb_samples);
             av_frame_unref(frame_.get());
             if (gets < 0) {
                 spdlog::error("Failed to resampling frame: {}", av_err_to_string(gets));

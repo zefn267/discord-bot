@@ -1,3 +1,14 @@
+/*
+ytdlp_tool — fetches track info for a URL via yt-dlp and prints
+title, duration, stream URL, page URL and HTTP headers.
+
+Usage:
+  ytdlp_tool <url>
+
+Examples:
+  ytdlp_tool "https://www.youtube.com/watch?v=..."
+  ytdlp_tool "https://soundcloud.com/artist/track"
+*/
 #include "ytdlp/soundtrack_info.h"
 
 #include <iostream>

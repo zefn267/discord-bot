@@ -7,7 +7,7 @@
 int main() {
     set_settings_logs();
 
-    print_version();
+    init_ffmpeg();
 
     const auto config = get_bot_config();
     if (!config) {
