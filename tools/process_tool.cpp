@@ -16,13 +16,14 @@ Examples:
 #include <spdlog/spdlog.h>
 
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
     std::vector<std::string> args(argv + 1, argv + argc);
-    auto res = process::run(args);
+    auto res = process::run(args, std::chrono::seconds{10});
     if (!res) {
         spdlog::error("Failed to run process");
         return 1;
     }
     int code = res->code;
-    std::cout << "exit code: " << code << '\n' << res->stdout_data << std::endl;
+    std::cout << std::format("exit code: {}\nstdout_data: {}\nstderr_data: {}\ntimeout: {}", code, res->stdout_data,
+            res->stderr_data, res->is_timeout);
 }

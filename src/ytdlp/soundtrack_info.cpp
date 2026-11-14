@@ -12,8 +12,16 @@ using json = nlohmann::json;
 std::optional<ytdlp::soundtrack_info> ytdlp::fetch_track_info(const std::string& url) {
     const std::vector<std::string> args{"yt-dlp", "-J", "--no-playlist", "-f", "bestaudio", "--", url};
     auto result = process::run(args);
-    if (!result || result->code != 0) {
+    if (!result) {
         spdlog::error("Failed to get data in fetch_track_info");
+        return std::nullopt;
+    }
+    if (result->is_timeout) {
+        spdlog::warn("yt-dlp timed out for '{}'", url);
+        return std::nullopt;
+    }
+    if (result->code !=  0) {
+        spdlog::error("yt-dlp exited with code {} for '{}': {}", result->code, url, result->stderr_data);
         return std::nullopt;
     }
     json data = json::parse(result->stdout_data, nullptr, false);
