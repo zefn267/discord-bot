@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <stop_token>
 #include <unordered_map>
 
 struct AVFormatContext;
@@ -26,7 +27,7 @@ using av_packet_ptr = std::unique_ptr<AVPacket, av_deleter>;
 using av_frame_ptr = std::unique_ptr<AVFrame, av_deleter>;
 using swr_context_ptr = std::unique_ptr<SwrContext, av_deleter>;
 
-enum class read_result { data, error, end_of_stream };
+enum class read_result { data, error, end_of_stream, stopped};
 
 void init_ffmpeg();
 
@@ -36,7 +37,10 @@ public:
 
     read_result read_pcm(std::vector<int16_t>& pcm);
 
+    void set_stop_token(std::stop_token token);
+
 private:
+    std::unique_ptr<std::stop_token> stop_token_ = std::make_unique<std::stop_token>();
     avcodec_context_ptr codec_context_;
     avformat_context_ptr format_context_;
     const AVCodec* codec_ = nullptr;

@@ -41,6 +41,9 @@ int main(int argc, char **argv) {
         if (result == read_result::error) {
             return 1;
         }
+        if (result == read_result::stopped) {
+            break;
+        }
     }
     file.close();
 }

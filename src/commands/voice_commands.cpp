@@ -84,6 +84,7 @@ void handle_test(const dpp::slashcommand_t& event, const command_context& contex
     context.test_playback_thread = std::jthread(
             [dec = std::move(dec), voice_client = connection->voiceclient.get()](std::stop_token token) mutable {
                 try {
+                    dec.set_stop_token(token);
                     std::vector<int16_t> pcm;
                     std::vector<int16_t> buf;
                     while (!token.stop_requested()) {
@@ -93,6 +94,9 @@ void handle_test(const dpp::slashcommand_t& event, const command_context& contex
                         auto result = dec.read_pcm(pcm);
                         if (result == read_result::error) {
                             spdlog::error("Failed to read pcm");
+                            break;
+                        }
+                        if (result == read_result::stopped) {
                             break;
                         }
                         if (result == read_result::data) {

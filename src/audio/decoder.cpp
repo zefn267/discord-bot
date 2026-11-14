@@ -37,6 +37,11 @@ std::string av_err_to_string(int err) {
 
     return errbuf;
 }
+
+int interrupt_cb(void* opaque) {
+    auto* token = static_cast<std::stop_token*>(opaque);
+    return (token && token->stop_requested()) ? 1 : 0;
+}
 } // namespace
 void init_ffmpeg() {
     auto version = av_version_info();
@@ -64,8 +69,18 @@ void av_deleter::operator()(AVFormatContext* format_context) const {
     avformat_close_input(&format_context);
 }
 
+void decoder::set_stop_token(std::stop_token token) {
+    *stop_token_ = std::move(token);
+}
+
 int decoder::open(const std::string& url, const std::unordered_map<std::string, std::string>& headers) {
-    AVFormatContext* fmt_context = nullptr;
+    AVFormatContext* fmt_context = avformat_alloc_context();
+    if (!fmt_context) {
+        spdlog::error("Failed to allocate format context");
+        return AVERROR(ENOMEM);
+    }
+    fmt_context->interrupt_callback.callback = interrupt_cb;
+    fmt_context->interrupt_callback.opaque = stop_token_.get();
     av_dict dict;
     if (!headers.empty()) {
         std::string all_headers;
@@ -178,6 +193,9 @@ read_result decoder::read_pcm(std::vector<int16_t>& pcm) {
                 }
                 state = states::draining;
                 continue;
+            }
+            if (result == AVERROR_EXIT) {
+                return read_result::stopped;
             }
             if (result < 0) {
                 spdlog::error("Failed to read packet: {}", av_err_to_string(result));
