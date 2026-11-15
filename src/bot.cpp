@@ -2,6 +2,7 @@
 #include "logging.h"
 #include "commands/command_registry.h"
 #include "commands/general_commands.h"
+#include "commands/music_commands.h"
 #include "commands/voice_commands.h"
 
 #include <spdlog/spdlog.h>
@@ -9,11 +10,12 @@
 
 bot::bot(const bot_config& config)
     : cluster_(config.token), testfile_path_(config.audio_file),
-      context_{.cluster = cluster_, .registry = registry_, .testfile_path = testfile_path_, .test_playback_thread = test_playback_thread_} {
+      context_{.cluster = cluster_, .registry = registry_, .testfile_path = testfile_path_, .playback_thread = test_playback_thread_} {
     cluster_.on_log(change_logs_from_dpp);
 
     register_general_commands(registry_);
     register_voice_commands(registry_);
+    register_music_commands(registry_);
 
     cluster_.on_slashcommand([this](const dpp::slashcommand_t& event) { handle_slash_command(event); });
     cluster_.on_ready([this](const dpp::ready_t& event) { handle_ready(event); });
@@ -40,7 +42,11 @@ void bot::handle_ready(const dpp::ready_t&) {
     if (dpp::run_once<struct register_bot_commands>()) {
         std::vector<dpp::slashcommand> discord_commands;
         for (auto& [name, cmd] : registry_.get_all_commands()) {
-            discord_commands.emplace_back(cmd.name, cmd.description, cluster_.me.id);
+            dpp::slashcommand definition(cmd.name, cmd.description, cluster_.me.id);
+            for (const auto& arg : cmd.arguments) {
+                definition.add_option(arg);
+            }
+            discord_commands.push_back(std::move(definition));
         }
         cluster_.global_bulk_command_create(discord_commands);
     }

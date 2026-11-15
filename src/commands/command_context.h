@@ -15,5 +15,5 @@ struct command_context {
     dpp::cluster& cluster;
     const command_registry& registry;
     const std::optional<std::string>& testfile_path;
-    std::jthread& test_playback_thread;
+    std::jthread& playback_thread;
 };

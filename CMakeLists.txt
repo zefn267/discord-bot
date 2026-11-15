@@ -26,12 +26,16 @@ add_library(discord_bot_core STATIC
         src/commands/general_commands.h
         src/commands/voice_commands.cpp
         src/commands/voice_commands.h
+        src/commands/music_commands.h
+        src/commands/music_commands.cpp
 
         src/voice/voice_checks.cpp
         src/voice/voice_checks.h
 
         src/audio/decoder.cpp
         src/audio/decoder.h
+        src/audio/playback.h
+        src/audio/playback.cpp
 
         src/process/process.cpp
         src/process/process.h

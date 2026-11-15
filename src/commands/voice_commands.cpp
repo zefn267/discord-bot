@@ -4,13 +4,13 @@
 #include "command_context.h"
 #include "audio/decoder.h"
 #include "voice/voice_checks.h"
+#include "audio/playback.h"
 
 #include <dpp/cache.h>
 #include <dpp/discordclient.h>
 #include <dpp/discordvoiceclient.h>
 #include <spdlog/spdlog.h>
 #include <exception>
-#include <chrono>
 #include <thread>
 
 
@@ -22,28 +22,26 @@ void handle_join(const dpp::slashcommand_t& event, const command_context& contex
         event.reply("Use this command on server!");
         return;
     }
-    auto user_channel = voice::user_channel(*guild, event.command.usr.id);
-    if (!user_channel) {
-        spdlog::info("User didn't join in channel");
-        event.reply(dpp::message("You don't seem to be in a voice channel!").set_flags(dpp::m_ephemeral));
-        return;
-    }
-    auto bot_channel = voice::bot_channel(*event.from(), guild->id);
-    if (bot_channel.has_value()) {
-        if (*user_channel == *bot_channel) {
+    auto res = voice::join_user_channel(*guild, *event.from(), context.cluster, event.command.usr.id);
+    switch (res) {
+        case voice::join_result::user_not_in_voice:
+            spdlog::info("User didn't join in channel");
+            event.reply(dpp::message("You don't seem to be in a voice channel!").set_flags(dpp::m_ephemeral));
+            return;
+        case voice::join_result::already_joined:
             spdlog::info("Bot channel already joined");
             event.reply(dpp::message("Don't need to join your channel as i'm already there with you!")
                             .set_flags(dpp::m_ephemeral));
             return;
-        }
-        event.reply(dpp::message("I’m already in another channel, use /leave first").set_flags(dpp::m_ephemeral));
-        return;
+        case voice::join_result::busy:
+            event.reply(dpp::message("I’m already in another channel, use /leave first").set_flags(dpp::m_ephemeral));
+            return;
+        case voice::join_result::joining:
+            event.reply(dpp::message("Joined your voice channel!").set_flags(dpp::m_ephemeral));
+            return;
+        case voice::join_result::failed:
+            event.reply(dpp::message("Failed to join!").set_flags(dpp::m_ephemeral));
     }
-    if (guild->connect_member_voice(context.cluster, event.command.usr.id)) {
-        event.reply(dpp::message("Joined your voice channel!").set_flags(dpp::m_ephemeral));
-        return;
-    }
-    event.reply(dpp::message("You don't seem to be in a voice channel!").set_flags(dpp::m_ephemeral));
 }
 
 void handle_leave(const dpp::slashcommand_t& event, const command_context&) {
@@ -81,44 +79,11 @@ void handle_test(const dpp::slashcommand_t& event, const command_context& contex
         return;
     }
     event.reply("Playing test file");
-    context.test_playback_thread = std::jthread(
+    context.playback_thread = std::jthread(
             [dec = std::move(dec), voice_client = connection->voiceclient.get()](std::stop_token token) mutable {
                 try {
                     dec.set_stop_token(token);
-                    std::vector<int16_t> pcm;
-                    std::vector<int16_t> buf;
-                    while (!token.stop_requested()) {
-                        while (voice_client->get_secs_remaining() > 2 && !token.stop_requested()) {
-                            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                        }
-                        auto result = dec.read_pcm(pcm);
-                        if (result == read_result::error) {
-                            spdlog::error("Failed to read pcm");
-                            break;
-                        }
-                        if (result == read_result::stopped) {
-                            break;
-                        }
-                        if (result == read_result::data) {
-                            buf.insert(buf.end(), pcm.begin(), pcm.end());
-                        }
-                        if (result == read_result::end_of_stream) {
-                            if (!buf.empty()) {
-                                buf.resize(dpp::send_audio_raw_max_length / sizeof(int16_t));
-                                voice_client->send_audio_raw(
-                                        reinterpret_cast<uint16_t*>(buf.data()), dpp::send_audio_raw_max_length);
-                                buf.clear();
-                            }
-                            break;
-                        }
-                        auto bytes = buf.size() * sizeof(int16_t);
-                        while (bytes >= dpp::send_audio_raw_max_length) {
-                            voice_client->send_audio_raw(
-                                    reinterpret_cast<uint16_t*>(buf.data()), dpp::send_audio_raw_max_length);
-                            buf.erase(buf.begin(), buf.begin() + dpp::send_audio_raw_max_length / sizeof(int16_t));
-                            bytes -= dpp::send_audio_raw_max_length;
-                        }
-                    }
+                    stream_to_voice(dec, voice_client, token);
                 } catch (const std::exception& e) {
                     spdlog::error("Worker error: {}", e.what());
                 }
