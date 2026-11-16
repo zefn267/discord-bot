@@ -27,7 +27,7 @@ using av_packet_ptr = std::unique_ptr<AVPacket, av_deleter>;
 using av_frame_ptr = std::unique_ptr<AVFrame, av_deleter>;
 using swr_context_ptr = std::unique_ptr<SwrContext, av_deleter>;
 
-enum class read_result { data, error, end_of_stream, stopped};
+enum class read_result { data, error, end_of_stream, stopped };
 
 void init_ffmpeg();
 
@@ -45,6 +45,7 @@ private:
     avformat_context_ptr format_context_;
     const AVCodec* codec_ = nullptr;
     av_frame_ptr frame_;
+    av_frame_ptr out_frame_;
     av_packet_ptr packet_;
     swr_context_ptr swr_context_;
     int audio_stream_ind_ = -1;

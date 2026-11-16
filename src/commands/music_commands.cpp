@@ -24,6 +24,10 @@ void handle_play(const dpp::slashcommand_t& event, const command_context& contex
         event.reply("Use this command on server!");
         return;
     }
+    if (!event.from()) {
+        event.reply(dpp::message("Bot is reconnecting, try again").set_flags(dpp::m_ephemeral));
+        return;
+    }
     auto res = voice::join_user_channel(*guild, *event.from(), context.cluster, event.command.usr.id);
     switch (res) {
         case voice::join_result::busy:
@@ -48,6 +52,11 @@ void handle_play(const dpp::slashcommand_t& event, const command_context& contex
                 event.edit_original_response(dpp::message("Failed to get track info!"));
                 return;
             }
+            if (!event.from()) {
+                event.edit_original_response(
+                        dpp::message("Bot is reconnecting, try again").set_flags(dpp::m_ephemeral));
+                return;
+            }
             auto voice_client = voice::wait_for_voice_client(
                     *event.from(), event.command.guild_id, std::chrono::seconds(10), token);
             if (!voice_client) {
@@ -55,18 +64,35 @@ void handle_play(const dpp::slashcommand_t& event, const command_context& contex
                 event.edit_original_response(dpp::message("Could not connect to the voice channel"));
                 return;
             }
-            decoder dec;
-            dec.set_stop_token(token);
-            if (dec.open(info->stream_url, info->http_headers) < 0) {
-                spdlog::error("Failed to open stream");
-                event.edit_original_response(dpp::message("Failed to open stream!"));
-                return;
+            std::optional<decoder> dec;
+            for (int i = 0; i < 5; ++i) {
+                if (token.stop_requested()) {
+                    return;
+                }
+                decoder d;
+                d.set_stop_token(token);
+                if (d.open(info->stream_url, info->http_headers) < 0) {
+                    spdlog::warn("Failed to open stream (Attempt {}/4, retrying)", i + 1);
+                    if (i == 4) {
+                        event.edit_original_response(dpp::message("Failed to open stream!"));
+                        return;
+                    }
+                } else {
+                    dec = std::move(d);
+                    break;
+                }
+                info = ytdlp::fetch_track_info(url_string);
+                if (!info) {
+                    event.edit_original_response(dpp::message("Failed to get track info!"));
+                    return;
+                }
             }
             std::string text = std::format("Now playing: {}", info->title);
             event.edit_original_response(dpp::message(text));
-            stream_to_voice(dec, voice_client, token);
+            stream_to_voice(dec.value(), voice_client, token);
         } catch (const std::exception& e) {
             spdlog::error("Worker error: {}", e.what());
+            event.edit_original_response(dpp::message("Failed to play stream!"));
         }
     });
 }

@@ -50,12 +50,12 @@ std::optional<process::result> process::run(const std::vector<std::string>& args
         spdlog::error("pipe2 error: {}", std::strerror(errno));
         return std::nullopt;
     }
+    unique_fd pipe_write_out{fd_out[1]};
+    unique_fd pipe_read_out{fd_out[0]};
     if (pipe2(fd_err, O_CLOEXEC) == -1) {
         spdlog::error("pipe2 error: {}", std::strerror(errno));
         return std::nullopt;
     }
-    unique_fd pipe_write_out{fd_out[1]};
-    unique_fd pipe_read_out{fd_out[0]};
     unique_fd pipe_write_err{fd_err[1]};
     unique_fd pipe_read_err{fd_err[0]};
     try {
@@ -99,6 +99,7 @@ std::optional<process::result> process::run(const std::vector<std::string>& args
                 }
                 is_failed = true;
                 err_code = errno;
+                kill(pid, SIGKILL);
                 break;
             }
             if (n == 0) {
@@ -128,6 +129,7 @@ std::optional<process::result> process::run(const std::vector<std::string>& args
                 }
             }
             if (is_failed) {
+                kill(pid, SIGKILL);
                 break;
             }
         }

@@ -22,6 +22,9 @@ void handle_join(const dpp::slashcommand_t& event, const command_context& contex
         event.reply("Use this command on server!");
         return;
     }
+    if (!event.from()) {
+        return;
+    }
     auto res = voice::join_user_channel(*guild, *event.from(), context.cluster, event.command.usr.id);
     switch (res) {
         case voice::join_result::user_not_in_voice:
@@ -44,14 +47,18 @@ void handle_join(const dpp::slashcommand_t& event, const command_context& contex
     }
 }
 
-void handle_leave(const dpp::slashcommand_t& event, const command_context&) {
+void handle_leave(const dpp::slashcommand_t& event, const command_context& context) {
     dpp::guild* guild = dpp::find_guild(event.command.guild_id);
     if (!guild) {
         spdlog::warn("Guild not found in cache");
         event.reply("Use this command on server!");
         return;
     }
+    if (!event.from()) {
+        return;
+    }
     if (voice::is_bot_and_user_in_same_channel(*guild, *event.from(), event.command.usr.id)) {
+        context.playback_thread = std::jthread();
         event.from()->disconnect_voice(event.command.guild_id);
         spdlog::info("Bot left channel");
         event.reply(dpp::message("Bot left the channel").set_flags(dpp::m_ephemeral));
@@ -64,6 +71,9 @@ void handle_leave(const dpp::slashcommand_t& event, const command_context&) {
 void handle_test(const dpp::slashcommand_t& event, const command_context& context) {
     if (!context.testfile_path.has_value()) {
         event.reply(dpp::message("Test audio file is not configured").set_flags(dpp::m_ephemeral));
+        return;
+    }
+    if (!event.from()) {
         return;
     }
     auto connection = event.from()->get_voice(event.command.guild_id);

@@ -14,6 +14,9 @@ extern "C" {
 }
 
 namespace {
+constexpr AVSampleFormat OUTPUT_FORMAT = AV_SAMPLE_FMT_S16;
+constexpr int OUTPUT_SAMPLE_RATE = 48000;
+constexpr int OUTPUT_CHANNELS = 2;
 
 class av_dict {
 public:
@@ -26,6 +29,7 @@ public:
     av_dict& operator=(const av_dict&) = delete;
 
     AVDictionary** get_address() { return &av_dict_; }
+
 private:
     AVDictionary* av_dict_ = nullptr;
 };
@@ -41,6 +45,18 @@ std::string av_err_to_string(int err) {
 int interrupt_cb(void* opaque) {
     auto* token = static_cast<std::stop_token*>(opaque);
     return (token && token->stop_requested()) ? 1 : 0;
+}
+
+void prepare_output_frame(AVFrame& frame) {
+    frame.format = OUTPUT_FORMAT;
+    frame.sample_rate = OUTPUT_SAMPLE_RATE;
+    av_channel_layout_default(&frame.ch_layout, OUTPUT_CHANNELS);
+}
+
+void append_samples(std::vector<int16_t>& pcm, const AVFrame& frame) {
+    auto c = frame.nb_samples * OUTPUT_CHANNELS;
+    auto ptr = reinterpret_cast<const int16_t*>(frame.data[0]);
+    pcm.insert(pcm.end(), ptr, ptr + c);
 }
 } // namespace
 void init_ffmpeg() {
@@ -87,10 +103,10 @@ int decoder::open(const std::string& url, const std::unordered_map<std::string, 
         for (const auto& [header, value] : headers) {
             all_headers += std::format("{}: {}\r\n", header, value);
         }
-        av_dict_set(dict.get_address(), "headers", all_headers.c_str(),  0);
+        av_dict_set(dict.get_address(), "headers", all_headers.c_str(), 0);
     }
     if (url.starts_with("https://") || url.starts_with("http://")) {
-        av_dict_set(dict.get_address(), "rw_timeout", "10000000",  0);
+        av_dict_set(dict.get_address(), "rw_timeout", "10000000", 0);
         av_dict_set(dict.get_address(), "reconnect", "1", 0);
         av_dict_set(dict.get_address(), "reconnect_streamed", "1", 0);
         av_dict_set(dict.get_address(), "reconnect_on_network_error", "1", 0);
@@ -142,44 +158,57 @@ int decoder::open(const std::string& url, const std::unordered_map<std::string, 
         spdlog::error("Failed to allocate frame");
         return AVERROR(ENOMEM);
     }
-
-    AVChannelLayout out_layout;
-    av_channel_layout_default(&out_layout, 2);
-    SwrContext* raw = nullptr;
-    code = swr_alloc_set_opts2(&raw, &out_layout, AV_SAMPLE_FMT_S16, 48000, &codec_context_->ch_layout,
-            codec_context_->sample_fmt, codec_context_->sample_rate, 0, nullptr);
-    av_channel_layout_uninit(&out_layout);
-    if (code < 0) {
-        spdlog::error("Failed to allocate swr context: {}", av_err_to_string(code));
-        return code;
+    out_frame_.reset(av_frame_alloc());
+    if (!out_frame_) {
+        spdlog::error("Failed to allocate out_frame");
+        return AVERROR(ENOMEM);
     }
-    swr_context_.reset(raw);
-    code = swr_init(swr_context_.get());
-    if (code < 0) {
-        spdlog::error("Failed to initialize swr: {}", av_err_to_string(code));
-        return code;
+    auto swr = swr_alloc();
+    if (!swr) {
+        spdlog::error("Failed to allocate swr context");
+        return AVERROR(ENOMEM);
     }
-    spdlog::info("Resampler initialized: {} Hz s16 ch{}", 48000, codec_context_->ch_layout.nb_channels);
+    swr_context_.reset(swr);
 
     return 0;
 }
 
 read_result decoder::read_pcm(std::vector<int16_t>& pcm) {
+    pcm.clear();
     while (true) {
         int code = avcodec_receive_frame(codec_context_.get(), frame_.get());
         if (code == 0) {
-            int max_out_samples = swr_get_out_samples(swr_context_.get(), frame_->nb_samples);
-            pcm.resize(max_out_samples * 2);
-            auto ptr = reinterpret_cast<uint8_t*>(pcm.data());
-            int gets =
-                    swr_convert(swr_context_.get(), &ptr, max_out_samples, frame_->extended_data, frame_->nb_samples);
+            prepare_output_frame(*out_frame_);
+            int res = swr_convert_frame(swr_context_.get(), out_frame_.get(), frame_.get());
+            if (res == AVERROR_INPUT_CHANGED) {
+                auto r = swr_convert_frame(swr_context_.get(), out_frame_.get(), nullptr);
+                if (r >= 0) {
+                    append_samples(pcm, *out_frame_);
+                }
+                av_frame_unref(out_frame_.get());
+                prepare_output_frame(*out_frame_);
+                auto code_result = swr_config_frame(swr_context_.get(), out_frame_.get(), frame_.get());
+                if (code_result < 0) {
+                    spdlog::error("Failed to config_frame: {}", av_err_to_string(code_result));
+                    return read_result::error;
+                }
+                code_result = swr_init(swr_context_.get());
+                if (code_result < 0) {
+                    spdlog::error("Failed to init swr: {}", av_err_to_string(code_result));
+                    return read_result::error;
+                }
+                spdlog::info("Audio format changed: {}, {} HZ", frame_->format, frame_->sample_rate);
+                res = swr_convert_frame(swr_context_.get(), out_frame_.get(), frame_.get());
+            }
             av_frame_unref(frame_.get());
-            if (gets < 0) {
-                spdlog::error("Failed to resampling frame: {}", av_err_to_string(gets));
+            if (res < 0) {
+                av_frame_unref(out_frame_.get());
+                spdlog::error("Failed to convert frame: {}", av_err_to_string(res));
                 return read_result::error;
             }
-            pcm.resize(gets * 2);
-            if (gets > 0) {
+            append_samples(pcm, *out_frame_);
+            av_frame_unref(out_frame_.get());
+            if (!pcm.empty()) {
                 return read_result::data;
             }
         } else if (code == AVERROR(EAGAIN)) {
@@ -215,17 +244,20 @@ read_result decoder::read_pcm(std::vector<int16_t>& pcm) {
             if (state == states::finished) {
                 return read_result::end_of_stream;
             }
-            int max_out_samples = swr_get_out_samples(swr_context_.get(), 0);
-            pcm.resize(max_out_samples * 2);
-            auto ptr = reinterpret_cast<uint8_t*>(pcm.data());
-            int gets = swr_convert(swr_context_.get(), &ptr, max_out_samples, nullptr, 0);
-            if (gets < 0) {
-                spdlog::error("Failed to resampling frame: {}", av_err_to_string(gets));
+            if (!swr_is_initialized(swr_context_.get())) {
+                return read_result::end_of_stream;
+            }
+            prepare_output_frame(*out_frame_);
+            auto res = swr_convert_frame(swr_context_.get(), out_frame_.get(), nullptr);
+            if (res < 0) {
+                av_frame_unref(out_frame_.get());
+                spdlog::error("Failed to convert frame: {}", av_err_to_string(res));
                 return read_result::error;
             }
-            pcm.resize(gets * 2);
+            append_samples(pcm, *out_frame_);
+            av_frame_unref(out_frame_.get());
             state = states::finished;
-            if (gets > 0) {
+            if (!pcm.empty()) {
                 return read_result::data;
             }
             return read_result::end_of_stream;
