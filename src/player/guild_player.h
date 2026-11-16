@@ -21,6 +21,14 @@ public:
 
     void enqueue(track track);
 
+    bool skip();
+
+    void clear();
+
+    void stop();
+
+    std::vector<track> queue_snapshot() const;
+
 private:
     dpp::cluster& cluster_;
     dpp::snowflake guild_id_;

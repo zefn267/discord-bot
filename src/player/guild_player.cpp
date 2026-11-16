@@ -87,11 +87,14 @@ void guild_player::stream_track(const track& current_track, std::stop_token toke
     if (!voice_client) {
         if (!token.stop_requested()) {
             write_in_channel(current_track.text_id, "Could not connect to the voice channel");
-            return;
         }
+        return;
     }
     write_in_channel(current_track.text_id, std::format("Now playing: {}", info->title));
     stream_to_voice(*dec, voice_client, token);
+    if (token.stop_requested()) {
+        voice_client->stop_audio();
+    }
 }
 
 dpp::discord_voice_client* guild_player::find_voice_client(std::stop_token token) {
@@ -114,4 +117,26 @@ dpp::discord_voice_client* guild_player::find_voice_client(std::stop_token token
 
 void guild_player::write_in_channel(dpp::snowflake text_id, const std::string& text) {
     cluster_.message_create(dpp::message(text_id, text));
+}
+
+bool guild_player::skip() {
+    std::lock_guard lock(state_mx_);
+    if (current_track_stop_) {
+        current_track_stop_->request_stop();
+        return true;
+    }
+    return false;
+}
+
+void guild_player::clear() {
+    track_queue_.clear();
+}
+
+void guild_player::stop() {
+    clear();
+    skip();
+}
+
+std::vector<track> guild_player::queue_snapshot() const {
+    return track_queue_.snapshot();
 }
