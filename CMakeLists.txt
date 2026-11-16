@@ -44,6 +44,9 @@ add_library(discord_bot_core STATIC
 
         src/ytdlp/soundtrack_info.cpp
         src/ytdlp/soundtrack_info.h
+
+        src/player/track_queue.h
+        src/player/track_queue.cpp
 )
 
 target_include_directories(discord_bot_core PUBLIC src)
