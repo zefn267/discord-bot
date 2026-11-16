@@ -16,7 +16,7 @@ public:
 
     std::shared_ptr<guild_player> find_player(dpp::snowflake guild_id);
 
-    void remove(dpp::snowflake guild_id);
+    bool remove(dpp::snowflake guild_id);
 
 private:
     dpp::cluster& cluster_;

@@ -31,4 +31,6 @@ private:
     void handle_ready(const dpp::ready_t&);
 
     void handle_voice_ready(const dpp::voice_ready_t& event);
+
+    void handle_voice_state(const dpp::voice_state_update_t& event);
 };

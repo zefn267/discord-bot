@@ -22,7 +22,7 @@ std::shared_ptr<guild_player> player_manager::get_or_create(dpp::snowflake guild
     return players_[guild_id];
 }
 
-void player_manager::remove(dpp::snowflake guild_id) {
+bool player_manager::remove(dpp::snowflake guild_id) {
     std::shared_ptr<guild_player> local = nullptr;
     {
         std::lock_guard lock(mx_);
@@ -30,6 +30,8 @@ void player_manager::remove(dpp::snowflake guild_id) {
         if (it != players_.end()) {
             local = std::move(it->second);
             players_.erase(it);
+            return true;
         }
     }
+    return false;
 }

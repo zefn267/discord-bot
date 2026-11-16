@@ -47,4 +47,6 @@ private:
     void stream_track(const track& current_track, std::stop_token token);
 
     void write_in_channel(dpp::snowflake text_id, const std::string& text);
+
+    dpp::discord_voice_client* current_voice_client();
 };

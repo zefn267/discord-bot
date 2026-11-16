@@ -91,9 +91,11 @@ void guild_player::stream_track(const track& current_track, std::stop_token toke
         return;
     }
     write_in_channel(current_track.text_id, std::format("Now playing: {}", info->title));
-    stream_to_voice(*dec, voice_client, token);
+    stream_to_voice(*dec, [this] { return current_voice_client(); }, token);
     if (token.stop_requested()) {
-        voice_client->stop_audio();
+        if (auto client = current_voice_client()) {
+            client->stop_audio();
+        }
     }
 }
 
@@ -139,4 +141,26 @@ void guild_player::stop() {
 
 std::vector<track> guild_player::queue_snapshot() const {
     return track_queue_.snapshot();
+}
+
+dpp::discord_voice_client* guild_player::current_voice_client() {
+    auto guild = dpp::find_guild(guild_id_);
+    if (!guild) {
+        return nullptr;
+    }
+    auto shard = cluster_.get_shard(guild->shard_id);
+    if (!shard) {
+        return nullptr;
+    }
+    auto res = shard->get_voice(guild_id_);
+    if (!res) {
+        return nullptr;
+    }
+    if (!res->voiceclient) {
+        return nullptr;
+    }
+    if (!res->voiceclient->is_ready()) {
+        return nullptr;
+    }
+    return res->voiceclient.get();
 }

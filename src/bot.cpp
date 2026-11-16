@@ -21,6 +21,7 @@ bot::bot(const bot_config& config)
     register_voice_commands(registry_);
     register_music_commands(registry_);
 
+    cluster_.on_voice_state_update([this](const dpp::voice_state_update_t& event) { handle_voice_state(event); });
     cluster_.on_slashcommand([this](const dpp::slashcommand_t& event) { handle_slash_command(event); });
     cluster_.on_ready([this](const dpp::ready_t& event) { handle_ready(event); });
     cluster_.on_voice_ready([this](const dpp::voice_ready_t& event) { handle_voice_ready(event); });
@@ -62,5 +63,21 @@ void bot::handle_voice_ready(const dpp::voice_ready_t& event) {
     dpp::discord_voice_client* voice_client = event.voice_client;
     if (voice_client && voice_client->is_ready()) {
         spdlog::info("Bot is ready for voice! Channel_id: {}", voice_client->channel_id);
+    }
+}
+
+void bot::handle_voice_state(const dpp::voice_state_update_t& event) {
+    const auto& state = event.state;
+    if (state.user_id == cluster_.me.id && state.channel_id == 0) {
+        auto client = event.from();
+        if (!client) {
+            return;
+        }
+        if (client->get_voice(state.guild_id)) {
+            return;
+        }
+        if (players_.remove(state.guild_id)) {
+            spdlog::info("Bot was disconnected from voice in guild {}, player removed", state.guild_id);
+        }
     }
 }

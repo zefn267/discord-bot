@@ -92,15 +92,28 @@ void handle_test(const dpp::slashcommand_t& event, const command_context& contex
         return;
     }
     event.reply("Playing test file");
-    context.playback_thread = std::jthread(
-            [dec = std::move(dec), voice_client = connection->voiceclient.get()](std::stop_token token) mutable {
-                try {
-                    dec.set_stop_token(token);
-                    stream_to_voice(dec, voice_client, token);
-                } catch (const std::exception& e) {
-                    spdlog::error("Worker error: {}", e.what());
+    context.playback_thread = std::jthread([dec = std::move(dec), event](std::stop_token token) mutable {
+        try {
+            dec.set_stop_token(token);
+            auto get_client = [&event]() -> dpp::discord_voice_client* {
+                auto shard = event.from();
+                if (!shard) {
+                    return nullptr;
                 }
-            });
+                auto voicecon = shard->get_voice(event.command.guild_id);
+                if (!voicecon) {
+                    return nullptr;
+                }
+                if (voicecon->voiceclient && voicecon->voiceclient->is_ready()) {
+                    return voicecon->voiceclient.get();
+                }
+                return nullptr;
+            };
+            stream_to_voice(dec, get_client, token);
+        } catch (const std::exception& e) {
+            spdlog::error("Worker error: {}", e.what());
+        }
+    });
 }
 } // namespace
 
