@@ -47,6 +47,10 @@ add_library(discord_bot_core STATIC
 
         src/player/track_queue.h
         src/player/track_queue.cpp
+        src/player/guild_player.h
+        src/player/guild_player.cpp
+        src/player/player_manager.h
+        src/player/player_manager.cpp
 )
 
 target_include_directories(discord_bot_core PUBLIC src)

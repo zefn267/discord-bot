@@ -2,6 +2,7 @@
 #include "config.h"
 #include "commands/command_registry.h"
 #include "commands/command_context.h"
+#include "player/player_manager.h"
 
 #include <thread>
 #include <dpp/dpp.h>
@@ -19,6 +20,7 @@ public:
 
 private:
     dpp::cluster cluster_;
+    player_manager players_;
     command_registry registry_;
     std::optional<std::string> testfile_path_;
     std::jthread test_playback_thread_;

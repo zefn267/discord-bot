@@ -12,10 +12,9 @@
 
 
 struct track {
-    std::string title;
     std::string webpage_url;
-    std::chrono::seconds duration{};
     uint64_t user_id;
+    uint64_t text_id;
 };
 
 class track_queue {

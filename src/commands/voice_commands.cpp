@@ -5,6 +5,7 @@
 #include "audio/decoder.h"
 #include "voice/voice_checks.h"
 #include "audio/playback.h"
+#include "player/player_manager.h"
 
 #include <dpp/cache.h>
 #include <dpp/discordclient.h>
@@ -55,13 +56,15 @@ void handle_leave(const dpp::slashcommand_t& event, const command_context& conte
         return;
     }
     if (!event.from()) {
+        event.reply(dpp::message("Bot is reconnecting, try again").set_flags(dpp::m_ephemeral));
         return;
     }
     if (voice::is_bot_and_user_in_same_channel(*guild, *event.from(), event.command.usr.id)) {
         context.playback_thread = std::jthread();
+        event.reply(dpp::message("Leaving the channel").set_flags(dpp::m_ephemeral));
+        context.player_mng.remove(event.command.guild_id);
         event.from()->disconnect_voice(event.command.guild_id);
         spdlog::info("Bot left channel");
-        event.reply(dpp::message("Bot left the channel").set_flags(dpp::m_ephemeral));
         return;
     }
     spdlog::info("Bot and user not on same channel");
