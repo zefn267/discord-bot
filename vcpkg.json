@@ -5,6 +5,7 @@
     "dpp",
     "spdlog",
     "nlohmann-json",
+    "gtest",
     {
       "name": "ffmpeg",
       "default-features": false,

@@ -87,3 +87,15 @@ target_link_libraries(ytdlp_tool PRIVATE discord_bot_core spdlog::spdlog nlohman
 add_executable(stream_tool tools/stream_tool.cpp)
 target_compile_options(stream_tool PRIVATE ${PROJECT_WARNINGS})
 target_link_libraries(stream_tool PRIVATE discord_bot_core spdlog::spdlog )
+
+enable_testing()
+find_package(GTest CONFIG REQUIRED)
+
+add_executable(unit_tests
+        tests/track_queue_test.cpp
+)
+target_link_libraries(unit_tests PRIVATE discord_bot_core GTest::gtest_main)
+target_compile_options(unit_tests PRIVATE ${PROJECT_WARNINGS})
+
+include(GoogleTest)
+gtest_discover_tests(unit_tests)
