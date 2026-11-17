@@ -17,6 +17,4 @@ struct command_context {
     dpp::cluster& cluster;
     player_manager& player_mng;
     const command_registry& registry;
-    const std::optional<std::string>& testfile_path;
-    std::jthread& playback_thread;
 };

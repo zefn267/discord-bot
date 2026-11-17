@@ -22,8 +22,6 @@ private:
     dpp::cluster cluster_;
     player_manager players_;
     command_registry registry_;
-    std::optional<std::string> testfile_path_;
-    std::jthread test_playback_thread_;
     command_context context_;
 
     void handle_slash_command(const dpp::slashcommand_t& event) const;

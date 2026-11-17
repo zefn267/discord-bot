@@ -179,6 +179,9 @@ read_result decoder::read_pcm(std::vector<int16_t>& pcm) {
         int code = avcodec_receive_frame(codec_context_.get(), frame_.get());
         if (code == 0) {
             prepare_output_frame(*out_frame_);
+            if (frame_->ch_layout.order == AV_CHANNEL_ORDER_UNSPEC) {
+                av_channel_layout_default(&frame_->ch_layout, frame_->ch_layout.nb_channels);
+            }
             int res = swr_convert_frame(swr_context_.get(), out_frame_.get(), frame_.get());
             if (res == AVERROR_INPUT_CHANGED) {
                 auto r = swr_convert_frame(swr_context_.get(), out_frame_.get(), nullptr);
