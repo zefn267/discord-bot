@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  schedule:
+    - cron: "0 4 * * 1"   # каждый понедельник в 04:00 UTC — свежий yt-dlp
 
 permissions:
   contents: read
@@ -27,7 +29,9 @@ jobs:
         with:
           context: .
           push: true
+          pull: true
           tags: ghcr.io/${{ github.repository }}:latest
+          build-args: |
+            YTDLP_CACHE_BUST=${{ github.run_id }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-

@@ -29,6 +29,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates python3 python3-venv \
     && rm -rf /var/lib/apt/lists/*
 
+ARG YTDLP_CACHE_BUST
 RUN python3 -m venv /opt/yt-dlp \
     && /opt/yt-dlp/bin/pip install --no-cache-dir "yt-dlp[default]"
 ENV PATH="/opt/yt-dlp/bin:${PATH}"

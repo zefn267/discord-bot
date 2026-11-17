@@ -75,3 +75,7 @@ Testing/
 .env
 test_data/
 *.raw
+
+cmake-build*/
+
+CMakeUserPresets.json

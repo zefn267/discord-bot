@@ -5,4 +5,4 @@ vcpkg_installed/
 .git/
 test_data/
 *.raw
-
+.env

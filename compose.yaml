@@ -1,7 +1,6 @@
 services:
   bot:
-    image: discord-bot:latest
-    build: .
+    image: ghcr.io/zefn267/discord-bot:latest
     restart: unless-stopped
     init: true
     env_file: .env
@@ -11,4 +10,3 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-
