@@ -8,6 +8,8 @@
 
 
 namespace {
+constexpr size_t MAX_OUTPUT_TRACKS = 10;
+
 void handle_play(const dpp::slashcommand_t& event, const command_context& context) {
     auto url = event.get_parameter("url");
     auto track_url = std::get_if<std::string>(&url);
@@ -142,10 +144,11 @@ void handle_queue(const dpp::slashcommand_t& event, const command_context& conte
                 return;
             }
             std::string res = "The list of tracks this server:\n\n";
-            int count = 1;
-            for (const auto& track : v) {
-                res += std::format("{}. `{}`\n", count, track.webpage_url);
-                ++count;
+            for (size_t i = 0; i < MAX_OUTPUT_TRACKS && i < v.size(); ++i) {
+                res += std::format("{}. `{}`\n", i + 1, v[i].webpage_url);
+            }
+            if (v.size() > MAX_OUTPUT_TRACKS) {
+                res += std::format("... and {} more", v.size() - MAX_OUTPUT_TRACKS);
             }
             const dpp::embed embed =
                     dpp::embed().set_color(0x3498db).set_title("🎵 List of tracks").set_description(res);
