@@ -1,0 +1,8 @@
+build/
+cmake-build-*/
+vcpkg_installed/
+.idea/
+.git/
+test_data/
+*.raw
+
