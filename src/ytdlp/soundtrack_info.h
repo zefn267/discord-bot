@@ -4,6 +4,7 @@
 #include <chrono>
 #include <optional>
 #include <unordered_map>
+#include <stop_token>
 
 
 namespace ytdlp {
@@ -15,5 +16,5 @@ struct soundtrack_info {
     std::string webpage_url;
 };
 
-std::optional<soundtrack_info> fetch_track_info(const std::string& url);
+std::optional<soundtrack_info> fetch_track_info(const std::string& url, std::stop_token token = {});
 } // namespace ytdlp

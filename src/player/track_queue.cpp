@@ -30,3 +30,15 @@ std::vector<track> track_queue::snapshot() const {
     std::lock_guard lock(mx_);
     return {tracks_.begin(), tracks_.end()};
 }
+
+std::optional<track> track_queue::pop_for(std::stop_token token, std::chrono::minutes timeout) {
+    std::unique_lock lock(mx_);
+    bool ok = cv_.wait_for(lock, token, timeout, [&] { return !tracks_.empty(); });
+    if (!ok) {
+        return std::nullopt;
+    }
+    track first = std::move(tracks_.front());
+    tracks_.pop_front();
+
+    return first;
+}

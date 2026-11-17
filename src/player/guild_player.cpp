@@ -14,6 +14,7 @@
 
 namespace {
 constexpr int MAX_OPEN_ATTEMPTS = 4;
+constexpr auto IDLE_TIMEOUT = std::chrono::minutes(10);
 } // namespace
 
 guild_player::guild_player(dpp::cluster& cluster, dpp::snowflake guild_id)
@@ -21,15 +22,23 @@ guild_player::guild_player(dpp::cluster& cluster, dpp::snowflake guild_id)
 
 void guild_player::run(std::stop_token token) {
     while (!token.stop_requested()) {
-        auto cur_track = track_queue_.pop(token);
+        auto cur_track = track_queue_.pop_for(token, IDLE_TIMEOUT);
         if (!cur_track) {
-            break;
+            if (token.stop_requested()) {
+                break;
+            }
+            leave_due_to_inactivity();
+            continue;
         }
         play_track(std::move(cur_track.value()), token);
     }
 }
 
 void guild_player::enqueue(track track) {
+    {
+        std::lock_guard lock(state_mx_);
+        text_id_ = track.text_id;
+    }
     track_queue_.push(std::move(track));
 }
 
@@ -54,8 +63,11 @@ void guild_player::play_track(track current_track, std::stop_token token) {
 }
 
 void guild_player::stream_track(const track& current_track, std::stop_token token) {
-    auto info = ytdlp::fetch_track_info(current_track.webpage_url);
+    auto info = ytdlp::fetch_track_info(current_track.webpage_url, token);
     if (!info) {
+        if (token.stop_requested()) {
+            return;
+        }
         write_in_channel(current_track.text_id, std::format("Could not load track: {}", current_track.webpage_url));
         return;
     }
@@ -70,6 +82,9 @@ void guild_player::stream_track(const track& current_track, std::stop_token toke
             spdlog::warn("Failed to open stream (Attempt {}/{}, retrying)", i + 1, MAX_OPEN_ATTEMPTS);
             if (i == MAX_OPEN_ATTEMPTS - 1) {
                 spdlog::error("Too many attempts");
+                if (token.stop_requested()) {
+                    return;
+                }
                 write_in_channel(current_track.text_id, "Could not open stream");
                 return;
             }
@@ -77,8 +92,11 @@ void guild_player::stream_track(const track& current_track, std::stop_token toke
             dec = std::move(d);
             break;
         }
-        info = ytdlp::fetch_track_info(current_track.webpage_url);
+        info = ytdlp::fetch_track_info(current_track.webpage_url, token);
         if (!info) {
+            if (token.stop_requested()) {
+                return;
+            }
             write_in_channel(current_track.text_id, std::format("Could not load track: {}", current_track.webpage_url));
             return;
         }
@@ -91,11 +109,19 @@ void guild_player::stream_track(const track& current_track, std::stop_token toke
         return;
     }
     write_in_channel(current_track.text_id, std::format("Now playing: {}", info->title));
-    stream_to_voice(*dec, [this] { return current_voice_client(); }, token);
-    if (token.stop_requested()) {
-        if (auto client = current_voice_client()) {
-            client->stop_audio();
-        }
+    auto res = stream_to_voice(*dec, [this] { return current_voice_client(); }, token);
+    switch (res) {
+        case stream_result::ended:
+            return;
+        case stream_result::lost:
+            return;
+        case stream_result::error:
+            write_in_channel(current_track.text_id, std::format("Playback interrupted: {}", info->title));
+            break;
+        case stream_result::stopped:
+            if (auto client = current_voice_client()) {
+                client->stop_audio();
+            }
     }
 }
 
@@ -163,4 +189,36 @@ dpp::discord_voice_client* guild_player::current_voice_client() {
         return nullptr;
     }
     return res->voiceclient.get();
+}
+
+void guild_player::leave_due_to_inactivity() {
+    dpp::snowflake local;
+    {
+        std::lock_guard lock(state_mx_);
+        local = text_id_;
+    }
+    auto guild = dpp::find_guild(guild_id_);
+    if (!guild) {
+        return;
+    }
+    auto shard = cluster_.get_shard(guild->shard_id);
+    if (!shard) {
+        return;
+    }
+    if (shard->get_voice(guild_id_)) {
+        cluster_.queue_work(100, [guild_id = guild_id_, cluster = &cluster_]() {
+            auto guild = dpp::find_guild(guild_id);
+            if (!guild) {
+                return;
+            }
+            auto shard = cluster->get_shard(guild->shard_id);
+            if (!shard) {
+                return;
+            }
+            if (shard->get_voice(guild_id)) {
+                shard->disconnect_voice(guild_id);
+            }
+        });
+        write_in_channel(local, "Left the voice channel due to inactivity");
+    }
 }

@@ -17,6 +17,7 @@ namespace {
 constexpr AVSampleFormat OUTPUT_FORMAT = AV_SAMPLE_FMT_S16;
 constexpr int OUTPUT_SAMPLE_RATE = 48000;
 constexpr int OUTPUT_CHANNELS = 2;
+constexpr int MAX_CONSECUTIVE_BAD_PACKETS = 75;
 
 class av_dict {
 public:
@@ -175,6 +176,7 @@ int decoder::open(const std::string& url, const std::unordered_map<std::string, 
 
 read_result decoder::read_pcm(std::vector<int16_t>& pcm) {
     pcm.clear();
+    int failed = 0;
     while (true) {
         int code = avcodec_receive_frame(codec_context_.get(), frame_.get());
         if (code == 0) {
@@ -239,10 +241,19 @@ read_result decoder::read_pcm(std::vector<int16_t>& pcm) {
             }
             result = avcodec_send_packet(codec_context_.get(), packet_.get());
             av_packet_unref(packet_.get());
+            if (result == AVERROR_INVALIDDATA) {
+                ++failed;
+                if (failed >= MAX_CONSECUTIVE_BAD_PACKETS) {
+                    spdlog::error("A lot of failed packets: {}", av_err_to_string(result));
+                    return read_result::error;
+                }
+                continue;
+            }
             if (result < 0) {
                 spdlog::error("Failed to send packet: {}", av_err_to_string(result));
                 return read_result::error;
             }
+            failed = 0;
         } else if (code == AVERROR_EOF) {
             if (state == states::finished) {
                 return read_result::end_of_stream;

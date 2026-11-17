@@ -2,7 +2,6 @@
 #include "unique_fd.h"
 
 #include <unistd.h>
-#include <fcntl.h>
 #include <spdlog/spdlog.h>
 #include <cstring>
 #include <cerrno>
@@ -10,6 +9,7 @@
 #include <system_error>
 #include <sys/wait.h>
 #include <poll.h>
+#include <algorithm>
 
 
 extern char** environ;
@@ -32,7 +32,8 @@ struct spawn_file_actions {
 };
 } // namespace
 
-std::optional<process::result> process::run(const std::vector<std::string>& args, std::chrono::milliseconds timeout) {
+std::optional<process::result> process::run(
+        const std::vector<std::string>& args, std::chrono::milliseconds timeout, std::stop_token token) {
     if (args.empty()) {
         spdlog::warn("No argument passed to process");
         return std::nullopt;
@@ -85,14 +86,19 @@ std::optional<process::result> process::run(const std::vector<std::string>& args
         int err_code = -1;
         int status;
         while (fds[0].fd >= 0 || fds[1].fd >= 0) {
-            int left =
-                    std::chrono::ceil<std::chrono::milliseconds>(deadline - std::chrono::steady_clock::now()).count();
-            if (left <= 0) {
+            auto left =
+                    std::chrono::ceil<std::chrono::milliseconds>(deadline - std::chrono::steady_clock::now());
+            if (left.count() <= 0) {
                 res_process.is_timeout = true;
                 kill(pid, SIGKILL);
                 break;
             }
-            auto n = poll(fds, 2, left);
+            auto n = poll(fds, 2, std::min(left, std::chrono::milliseconds(100)).count());
+            if (token.stop_requested()) {
+                res_process.is_stopped = true;
+                kill(pid, SIGKILL);
+                break;
+            }
             if (n == -1) {
                 if (errno == EINTR) {
                     continue;

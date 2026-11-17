@@ -23,6 +23,8 @@ public:
 
     std::optional<track> pop(std::stop_token token);
 
+    std::optional<track> pop_for(std::stop_token token, std::chrono::minutes timeout);
+
     void clear();
 
     std::vector<track> snapshot() const;

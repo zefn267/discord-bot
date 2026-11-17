@@ -32,6 +32,7 @@ public:
 private:
     dpp::cluster& cluster_;
     dpp::snowflake guild_id_;
+    dpp::snowflake text_id_;
     track_queue track_queue_;
     std::mutex state_mx_;
     std::optional<std::stop_source> current_track_stop_;
@@ -49,4 +50,6 @@ private:
     void write_in_channel(dpp::snowflake text_id, const std::string& text);
 
     dpp::discord_voice_client* current_voice_client();
+
+    void leave_due_to_inactivity();
 };
