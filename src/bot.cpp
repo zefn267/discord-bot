@@ -79,3 +79,11 @@ void bot::handle_voice_state(const dpp::voice_state_update_t& event) {
         }
     }
 }
+
+void bot::stop() {
+    if (stopping_.exchange(true)) {
+        return;
+    }
+    players_.remove_all();
+    cluster_.shutdown();
+}

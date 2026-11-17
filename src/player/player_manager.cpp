@@ -35,3 +35,12 @@ bool player_manager::remove(dpp::snowflake guild_id) {
     }
     return false;
 }
+
+void player_manager::remove_all() {
+    std::unordered_map<dpp::snowflake, std::shared_ptr<guild_player>> local{};
+    {
+        std::lock_guard lock(mx_);
+        local = std::move(players_);
+        players_.clear();
+    }
+}

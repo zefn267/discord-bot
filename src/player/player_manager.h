@@ -18,6 +18,8 @@ public:
 
     bool remove(dpp::snowflake guild_id);
 
+    void remove_all();
+
 private:
     dpp::cluster& cluster_;
     std::unordered_map<dpp::snowflake, std::shared_ptr<guild_player>> players_;

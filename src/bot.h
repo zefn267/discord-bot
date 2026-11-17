@@ -18,11 +18,14 @@ public:
 
     void start();
 
+    void stop();
+
 private:
     dpp::cluster cluster_;
     player_manager players_;
     command_registry registry_;
     command_context context_;
+    std::atomic<bool> stopping_{false};
 
     void handle_slash_command(const dpp::slashcommand_t& event) const;
 

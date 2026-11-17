@@ -14,6 +14,7 @@ stream_result stream_to_voice(
         decoder& dec, const std::function<dpp::discord_voice_client*()>& get_client, const std::stop_token& token) {
     std::vector<int16_t> pcm;
     std::vector<int16_t> buf;
+    auto last_log = std::chrono::steady_clock::now();
     while (!token.stop_requested()) {
         dpp::discord_voice_client* voice = nullptr;
         while (!token.stop_requested()) {
@@ -22,7 +23,12 @@ stream_result stream_to_voice(
                 spdlog::warn("Voice connection lost");
                 return stream_result::lost;
             }
-            if (voice->get_secs_remaining() <= TARGET_BUFFER_SECONDS) {
+            auto remaining = voice->get_secs_remaining();
+            if (std::chrono::steady_clock::now() - last_log >= std::chrono::seconds(1)) {
+                spdlog::debug("Buffer: {:.2f}s", remaining);
+                last_log = std::chrono::steady_clock::now();
+            }
+            if (remaining <= TARGET_BUFFER_SECONDS) {
                 break;
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
