@@ -10,6 +10,7 @@
 #include <dpp/guild.h>
 #include <spdlog/spdlog.h>
 #include <format>
+#include <chrono>
 
 
 namespace {
@@ -75,6 +76,12 @@ void guild_player::stream_track(const track& current_track, std::stop_token toke
     for (int i = 0; i < MAX_OPEN_ATTEMPTS; ++i) {
         if (token.stop_requested()) {
             return;
+        }
+        while (info->available_at && std::chrono::system_clock::now() < *info->available_at) {
+            if (token.stop_requested()) {
+                return;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
         decoder d;
         d.set_stop_token(token);

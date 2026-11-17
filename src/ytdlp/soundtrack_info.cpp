@@ -41,6 +41,10 @@ std::optional<ytdlp::soundtrack_info> ytdlp::fetch_track_info(const std::string&
         return std::nullopt;
     }
     soundtrack_info info;
+    if (data.contains("available_at") && data["available_at"].is_number()) {
+        info.available_at = std::chrono::system_clock::time_point{
+                std::chrono::seconds{std::llround(data["available_at"].get<double>())}};
+    }
     info.stream_url = data["url"];
     info.webpage_url = data.value("webpage_url", std::string{});
     if (data["duration"].is_number()) {
